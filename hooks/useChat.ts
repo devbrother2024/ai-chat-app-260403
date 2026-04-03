@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import type { Message, Chat, SSEChunk } from "@/types/chat";
+import type { Message, Chat, SSEChunk, ToolCallInfo } from "@/types/chat";
 import { loadChats, saveChats } from "@/lib/storage";
 
 function generateId(): string {
@@ -69,7 +69,7 @@ export function useChat() {
   }, []);
 
   const sendMessage = useCallback(
-    async (content: string) => {
+    async (content: string, mcpServerIds?: string[]) => {
       if (!content.trim() || isStreaming) return;
 
       setError(null);
@@ -122,7 +122,7 @@ export function useChat() {
         );
 
       const withUser = updateChat(currentChats, chatId, [
-        ...((currentChats.find((c) => c.id === chatId)?.messages) ?? []),
+        ...(currentChats.find((c) => c.id === chatId)?.messages ?? []),
         userMessage,
       ]);
       persistChats(withUser);
@@ -142,10 +142,15 @@ export function useChat() {
       abortRef.current = controller;
 
       try {
+        const body: Record<string, unknown> = { history, message };
+        if (mcpServerIds && mcpServerIds.length > 0) {
+          body.mcpServerIds = mcpServerIds;
+        }
+
         const response = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ history, message }),
+          body: JSON.stringify(body),
           signal: controller.signal,
         });
 
@@ -162,10 +167,25 @@ export function useChat() {
         const decoder = new TextDecoder();
         let accumulated = "";
         let buffer = "";
+        const toolCalls: ToolCallInfo[] = [];
+        let pendingToolCallName: string | null = null;
 
         const currentMessages = withUser.find(
           (c) => c.id === chatId,
         )!.messages;
+
+        const updateAssistant = () => {
+          const updatedAssistant: Message = {
+            ...assistantMessage,
+            content: accumulated,
+            toolCalls: toolCalls.length > 0 ? [...toolCalls] : undefined,
+          };
+          const next = updateChat(currentChats, chatId!, [
+            ...currentMessages,
+            updatedAssistant,
+          ]);
+          setChats(next);
+        };
 
         while (true) {
           const { done, value } = await reader.read();
@@ -184,20 +204,45 @@ export function useChat() {
 
             try {
               const parsed: SSEChunk = JSON.parse(data);
-              if (parsed.error) {
-                throw new Error(parsed.error);
+
+              if (parsed.type === "error" || parsed.error) {
+                throw new Error(parsed.error ?? "알 수 없는 오류");
               }
-              if (parsed.content) {
-                accumulated += parsed.content;
-                const updatedAssistant = {
-                  ...assistantMessage,
-                  content: accumulated,
-                };
-                const next = updateChat(currentChats, chatId!, [
-                  ...currentMessages,
-                  updatedAssistant,
-                ]);
-                setChats(next);
+
+              if (parsed.type === "tool_call_start" && parsed.toolCall) {
+                pendingToolCallName = parsed.toolCall.toolName;
+                toolCalls.push({ ...parsed.toolCall });
+                updateAssistant();
+              } else if (
+                parsed.type === "tool_call_result" &&
+                parsed.toolCall
+              ) {
+                const idx = toolCalls.findIndex(
+                  (tc) =>
+                    tc.toolName === (pendingToolCallName ?? parsed.toolCall!.toolName) &&
+                    tc.status === "calling",
+                );
+                if (idx !== -1) {
+                  toolCalls[idx] = {
+                    ...toolCalls[idx],
+                    status: parsed.toolCall.status,
+                    result: parsed.toolCall.result,
+                    error: parsed.toolCall.error,
+                    completedAt: parsed.toolCall.completedAt ?? Date.now(),
+                  };
+                } else {
+                  toolCalls.push({ ...parsed.toolCall });
+                }
+                pendingToolCallName = null;
+                updateAssistant();
+              } else if (
+                parsed.type === "text" ||
+                (!parsed.type && parsed.content)
+              ) {
+                if (parsed.content) {
+                  accumulated += parsed.content;
+                  updateAssistant();
+                }
               }
             } catch (e) {
               if (e instanceof Error && e.message !== data) throw e;
@@ -205,9 +250,13 @@ export function useChat() {
           }
         }
 
-        const finalMessages = [
+        const finalMessages: Message[] = [
           ...currentMessages,
-          { ...assistantMessage, content: accumulated },
+          {
+            ...assistantMessage,
+            content: accumulated,
+            toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+          },
         ];
         const finalChats = updateChat(currentChats, chatId!, finalMessages);
         persistChats(finalChats);
@@ -216,7 +265,9 @@ export function useChat() {
           return;
         }
         const msg =
-          err instanceof Error ? err.message : "알 수 없는 오류가 발생했습니다.";
+          err instanceof Error
+            ? err.message
+            : "알 수 없는 오류가 발생했습니다.";
         setError(msg);
       } finally {
         setIsStreaming(false);
