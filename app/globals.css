@@ -42,8 +42,6 @@
 }
 
 :root.dark {
-  --background: #0a0a0a;
-  --foreground: #ededed;
   color-scheme: dark;
 }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, type KeyboardEvent } from "react";
+import Link from "next/link";
 import {
   Send,
   Square,
@@ -11,10 +12,14 @@ import {
   User,
   Sun,
   Moon,
+  Settings,
 } from "lucide-react";
 import { useChat } from "@/hooks/useChat";
+import { useChatMcp } from "@/hooks/useChatMcp";
 import { useTheme } from "@/hooks/useTheme";
 import { MarkdownRenderer } from "@/components/chat/MarkdownRenderer";
+import { ToolCallBubble } from "@/components/chat/ToolCallBubble";
+import { McpToolToggle } from "@/components/chat/McpToolToggle";
 
 export default function Home() {
   const {
@@ -29,6 +34,14 @@ export default function Home() {
     sendMessage,
     stopStreaming,
   } = useChat();
+
+  const {
+    availableTools,
+    enabledToolCount,
+    toggleTool,
+    toggleAllTools,
+    mcpServerIds,
+  } = useChatMcp();
 
   const { theme, toggleTheme } = useTheme();
   const [input, setInput] = useState("");
@@ -48,7 +61,7 @@ export default function Home() {
 
   const handleSend = () => {
     if (!input.trim() || isStreaming) return;
-    sendMessage(input);
+    sendMessage(input, mcpServerIds);
     setInput("");
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
@@ -139,6 +152,19 @@ export default function Home() {
             <span className="text-xs text-foreground/40">
               gemini-2.5-flash-lite
             </span>
+            <McpToolToggle
+              availableTools={availableTools}
+              enabledToolCount={enabledToolCount}
+              onToggleTool={toggleTool}
+              onToggleAll={toggleAllTools}
+            />
+            <Link
+              href="/settings/mcp"
+              className="rounded-lg p-1.5 hover:bg-foreground/10 transition-colors"
+              aria-label="MCP 설정"
+            >
+              <Settings size={16} />
+            </Link>
             <button
               onClick={toggleTheme}
               className="rounded-lg p-1.5 hover:bg-foreground/10 transition-colors"
@@ -178,6 +204,15 @@ export default function Home() {
                     <p className="text-xs font-medium text-foreground/50 mb-1">
                       {msg.role === "user" ? "나" : "AI"}
                     </p>
+
+                    {msg.role === "model" && msg.toolCalls && (
+                      <div className="mb-2">
+                        {msg.toolCalls.map((tc) => (
+                          <ToolCallBubble key={tc.id} toolCall={tc} />
+                        ))}
+                      </div>
+                    )}
+
                     {msg.role === "user" ? (
                       <div className="text-sm leading-relaxed whitespace-pre-wrap break-words">
                         {msg.content}
