@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import type { Message, Chat, SSEChunk, ToolCallInfo } from "@/types/chat";
-import { loadChats, saveChats } from "@/lib/storage";
+import { loadChats, saveChat, deleteChatById } from "@/lib/storage";
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -21,20 +21,16 @@ export function useChat() {
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    const saved = loadChats();
-    setChats(saved);
-    if (saved.length > 0) {
-      setActiveChatId(saved[0].id);
-    }
+    loadChats().then((saved) => {
+      setChats(saved);
+      if (saved.length > 0) {
+        setActiveChatId(saved[0].id);
+      }
+    });
   }, []);
 
   const activeChat = chats.find((c) => c.id === activeChatId) ?? null;
   const messages = activeChat?.messages ?? [];
-
-  const persistChats = useCallback((next: Chat[]) => {
-    setChats(next);
-    saveChats(next);
-  }, []);
 
   const createChat = useCallback(() => {
     const newChat: Chat = {
@@ -44,22 +40,23 @@ export function useChat() {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
-    const next = [newChat, ...chats];
-    persistChats(next);
+    setChats((prev) => [newChat, ...prev]);
     setActiveChatId(newChat.id);
     setError(null);
+    saveChat(newChat);
     return newChat.id;
-  }, [chats, persistChats]);
+  }, []);
 
   const deleteChat = useCallback(
     (chatId: string) => {
       const next = chats.filter((c) => c.id !== chatId);
-      persistChats(next);
+      setChats(next);
       if (activeChatId === chatId) {
         setActiveChatId(next.length > 0 ? next[0].id : null);
       }
+      deleteChatById(chatId);
     },
-    [chats, activeChatId, persistChats],
+    [chats, activeChatId],
   );
 
   const stopStreaming = useCallback(() => {
@@ -125,14 +122,14 @@ export function useChat() {
         ...(currentChats.find((c) => c.id === chatId)?.messages ?? []),
         userMessage,
       ]);
-      persistChats(withUser);
+      setChats(withUser);
+      const chatAfterUser = withUser.find((c) => c.id === chatId)!;
+      saveChat(chatAfterUser);
 
-      const allMessages = withUser
-        .find((c) => c.id === chatId)!
-        .messages.map((m) => ({
-          role: m.role as "user" | "model",
-          parts: [{ text: m.content }],
-        }));
+      const allMessages = chatAfterUser.messages.map((m) => ({
+        role: m.role as "user" | "model",
+        parts: [{ text: m.content }],
+      }));
 
       const history = allMessages.slice(0, -1);
       const message = allMessages.at(-1)!.parts[0].text;
@@ -170,9 +167,7 @@ export function useChat() {
         const toolCalls: ToolCallInfo[] = [];
         let pendingToolCallName: string | null = null;
 
-        const currentMessages = withUser.find(
-          (c) => c.id === chatId,
-        )!.messages;
+        const currentMessages = chatAfterUser.messages;
 
         const updateAssistant = () => {
           const updatedAssistant: Message = {
@@ -259,7 +254,9 @@ export function useChat() {
           },
         ];
         const finalChats = updateChat(currentChats, chatId!, finalMessages);
-        persistChats(finalChats);
+        setChats(finalChats);
+        const finalChat = finalChats.find((c) => c.id === chatId)!;
+        await saveChat(finalChat);
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") {
           return;
@@ -274,7 +271,7 @@ export function useChat() {
         abortRef.current = null;
       }
     },
-    [activeChatId, chats, isStreaming, persistChats],
+    [activeChatId, chats, isStreaming],
   );
 
   return {

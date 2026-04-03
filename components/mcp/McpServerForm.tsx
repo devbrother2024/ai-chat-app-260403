@@ -62,6 +62,8 @@ export function McpServerForm({
   const [url, setUrl] = useState("");
   const [headers, setHeaders] = useState<KeyValuePair[]>([]);
 
+  const [httpEnvVars, setHttpEnvVars] = useState<KeyValuePair[]>([]);
+
   const [command, setCommand] = useState("");
   const [args, setArgs] = useState("");
   const [envVars, setEnvVars] = useState<KeyValuePair[]>([]);
@@ -75,6 +77,7 @@ export function McpServerForm({
       if (editingServer.transport.type === "streamable-http") {
         setUrl(editingServer.transport.url);
         setHeaders(toKeyValuePairs(editingServer.transport.headers));
+        setHttpEnvVars(toKeyValuePairs(editingServer.transport.env));
         setCommand("");
         setArgs("");
         setEnvVars([]);
@@ -84,12 +87,14 @@ export function McpServerForm({
         setEnvVars(toKeyValuePairs(editingServer.transport.env));
         setUrl("");
         setHeaders([]);
+        setHttpEnvVars([]);
       }
     } else {
       setName("");
       setTransportType("streamable-http");
       setUrl("");
       setHeaders([]);
+      setHttpEnvVars([]);
       setCommand("");
       setArgs("");
       setEnvVars([]);
@@ -105,6 +110,7 @@ export function McpServerForm({
         type: "streamable-http",
         url,
         headers: toRecord(headers),
+        env: toRecord(httpEnvVars),
       };
     } else {
       const parsedArgs = args
@@ -205,7 +211,7 @@ export function McpServerForm({
                   onChange={(e) => setUrl(e.target.value)}
                 />
                 <p className="text-[10px] text-muted-foreground">
-                  {"서버 환경변수: ${VAR_NAME} 형식 (예: ${MCP_SERVER_URL}/mcp)"}
+                  {"환경 변수에 등록한 값을 ${KEY} 형식으로 참조할 수 있습니다."}
                 </p>
               </div>
               <KeyValueEditor
@@ -216,7 +222,16 @@ export function McpServerForm({
                 onRemove={(i) => removePair(setHeaders, i)}
                 keyPlaceholder="Authorization"
                 valuePlaceholder="Bearer ${API_KEY}"
-                hint={"값에 ${VAR_NAME} 사용 시 서버 환경변수로 치환됩니다."}
+              />
+              <KeyValueEditor
+                label="환경 변수"
+                pairs={httpEnvVars}
+                onAdd={() => addPair(setHttpEnvVars)}
+                onUpdate={(i, f, v) => updatePair(setHttpEnvVars, i, f, v)}
+                onRemove={(i) => removePair(setHttpEnvVars, i)}
+                keyPlaceholder="HF_TOKEN"
+                valuePlaceholder="hf_xxxxx..."
+                hint={"URL·Headers에서 ${KEY} 형식으로 참조됩니다."}
               />
             </>
           ) : (

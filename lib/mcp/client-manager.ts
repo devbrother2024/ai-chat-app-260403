@@ -167,20 +167,27 @@ class McpClientManager {
     this.connections.delete(serverId);
   }
 
-  private resolveEnvVars(value: string): string {
-    return value.replace(/\$\{(\w+)\}/g, (_, key) => process.env[key] ?? "");
+  private resolveEnvVars(
+    value: string,
+    localEnv?: Record<string, string>,
+  ): string {
+    return value.replace(
+      /\$\{(\w+)\}/g,
+      (_, key) => localEnv?.[key] ?? process.env[key] ?? "",
+    );
   }
 
   private createTransport(
     config: McpTransportConfig,
   ): StreamableHTTPClientTransport | StdioClientTransport {
     if (config.type === "streamable-http") {
-      const resolvedUrl = this.resolveEnvVars(config.url);
+      const env = config.env;
+      const resolvedUrl = this.resolveEnvVars(config.url, env);
       const resolvedHeaders = config.headers
         ? Object.fromEntries(
             Object.entries(config.headers).map(([k, v]) => [
               k,
-              this.resolveEnvVars(v),
+              this.resolveEnvVars(v, env),
             ]),
           )
         : undefined;

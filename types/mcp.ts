@@ -4,6 +4,7 @@ export interface StreamableHttpTransport {
   type: "streamable-http";
   url: string;
   headers?: Record<string, string>;
+  env?: Record<string, string>;
 }
 
 export interface StdioTransport {

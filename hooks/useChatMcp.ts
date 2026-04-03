@@ -59,8 +59,9 @@ export function useChatMcp() {
   }, []);
 
   useEffect(() => {
-    const loaded = loadMcpServers();
-    setServers(loaded);
+    loadMcpServers().then((loaded) => {
+      setServers(loaded);
+    });
     setDisabledTools(loadDisabledTools());
   }, []);
 

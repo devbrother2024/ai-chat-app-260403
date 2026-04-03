@@ -2,7 +2,11 @@
 
 import { useState, useCallback, useEffect } from "react";
 import type { McpServer, McpTransportConfig } from "@/types/mcp";
-import { loadMcpServers, saveMcpServers } from "@/lib/mcp-storage";
+import {
+  loadMcpServers,
+  saveMcpServer,
+  deleteMcpServer as deleteMcpServerFromDb,
+} from "@/lib/mcp-storage";
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -12,7 +16,7 @@ export function useMcpServers() {
   const [servers, setServers] = useState<McpServer[]>([]);
 
   useEffect(() => {
-    setServers(loadMcpServers());
+    loadMcpServers().then(setServers);
   }, []);
 
   const addServer = useCallback(
@@ -26,11 +30,8 @@ export function useMcpServers() {
         createdAt: now,
         updatedAt: now,
       };
-      setServers((prev) => {
-        const next = [...prev, server];
-        saveMcpServers(next);
-        return next;
-      });
+      setServers((prev) => [...prev, server]);
+      saveMcpServer(server);
     },
     [],
   );
@@ -41,7 +42,8 @@ export function useMcpServers() {
         const next = prev.map((s) =>
           s.id === id ? { ...s, name, transport, updatedAt: Date.now() } : s,
         );
-        saveMcpServers(next);
+        const updated = next.find((s) => s.id === id);
+        if (updated) saveMcpServer(updated);
         return next;
       });
     },
@@ -49,11 +51,8 @@ export function useMcpServers() {
   );
 
   const deleteServer = useCallback((id: string) => {
-    setServers((prev) => {
-      const next = prev.filter((s) => s.id !== id);
-      saveMcpServers(next);
-      return next;
-    });
+    setServers((prev) => prev.filter((s) => s.id !== id));
+    deleteMcpServerFromDb(id);
   }, []);
 
   const toggleServer = useCallback((id: string) => {
@@ -63,7 +62,8 @@ export function useMcpServers() {
           ? { ...s, enabled: !s.enabled, updatedAt: Date.now() }
           : s,
       );
-      saveMcpServers(next);
+      const toggled = next.find((s) => s.id === id);
+      if (toggled) saveMcpServer(toggled);
       return next;
     });
   }, []);
