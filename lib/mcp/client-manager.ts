@@ -9,6 +9,7 @@ import type {
   McpToolInfo,
   McpPromptInfo,
   McpResourceInfo,
+  McpContentPart,
   McpToolResult,
   McpPromptResult,
   McpResourceResult,
@@ -120,7 +121,7 @@ class McpClientManager {
     const client = this.getConnectedClient(serverId);
     const result = await client.callTool({ name: toolName, arguments: args });
     return {
-      content: (result.content as { type: string; text?: string }[]) ?? [],
+      content: (result.content as McpContentPart[]) ?? [],
       isError: result.isError as boolean | undefined,
     };
   }

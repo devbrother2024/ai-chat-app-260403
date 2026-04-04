@@ -65,6 +65,8 @@ export interface McpServerStatus {
 export interface McpContentPart {
   type: string;
   text?: string;
+  data?: string;
+  mimeType?: string;
 }
 
 export interface McpToolResult {
