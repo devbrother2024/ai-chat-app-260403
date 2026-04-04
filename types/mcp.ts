@@ -4,7 +4,6 @@ export interface StreamableHttpTransport {
   type: "streamable-http";
   url: string;
   headers?: Record<string, string>;
-  env?: Record<string, string>;
 }
 
 export interface StdioTransport {
@@ -66,6 +65,8 @@ export interface McpServerStatus {
 export interface McpContentPart {
   type: string;
   text?: string;
+  data?: string;
+  mimeType?: string;
 }
 
 export interface McpToolResult {

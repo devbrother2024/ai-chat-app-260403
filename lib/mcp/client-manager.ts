@@ -9,6 +9,7 @@ import type {
   McpToolInfo,
   McpPromptInfo,
   McpResourceInfo,
+  McpContentPart,
   McpToolResult,
   McpPromptResult,
   McpResourceResult,
@@ -120,7 +121,7 @@ class McpClientManager {
     const client = this.getConnectedClient(serverId);
     const result = await client.callTool({ name: toolName, arguments: args });
     return {
-      content: (result.content as { type: string; text?: string }[]) ?? [],
+      content: (result.content as McpContentPart[]) ?? [],
       isError: result.isError as boolean | undefined,
     };
   }
@@ -167,33 +168,13 @@ class McpClientManager {
     this.connections.delete(serverId);
   }
 
-  private resolveEnvVars(
-    value: string,
-    localEnv?: Record<string, string>,
-  ): string {
-    return value.replace(
-      /\$\{(\w+)\}/g,
-      (_, key) => localEnv?.[key] ?? process.env[key] ?? "",
-    );
-  }
-
   private createTransport(
     config: McpTransportConfig,
   ): StreamableHTTPClientTransport | StdioClientTransport {
     if (config.type === "streamable-http") {
-      const env = config.env;
-      const resolvedUrl = this.resolveEnvVars(config.url, env);
-      const resolvedHeaders = config.headers
-        ? Object.fromEntries(
-            Object.entries(config.headers).map(([k, v]) => [
-              k,
-              this.resolveEnvVars(v, env),
-            ]),
-          )
-        : undefined;
-      return new StreamableHTTPClientTransport(new URL(resolvedUrl), {
-        requestInit: resolvedHeaders
-          ? { headers: resolvedHeaders }
+      return new StreamableHTTPClientTransport(new URL(config.url), {
+        requestInit: config.headers
+          ? { headers: config.headers }
           : undefined,
       });
     }

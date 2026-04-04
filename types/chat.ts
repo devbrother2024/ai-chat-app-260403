@@ -5,7 +5,7 @@ export interface ToolCallInfo {
   toolName: string;
   args: Record<string, unknown>;
   status: "calling" | "success" | "error";
-  result?: { content: { type: string; text?: string }[]; isError?: boolean };
+  result?: { content: { type: string; text?: string; data?: string; mimeType?: string }[]; isError?: boolean };
   error?: string;
   startedAt: number;
   completedAt?: number;

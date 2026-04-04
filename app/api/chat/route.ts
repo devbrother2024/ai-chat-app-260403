@@ -6,7 +6,7 @@ import {
   mcpToolToFunctionDeclaration,
 } from "@/lib/gemini";
 import { mcpClientManager } from "@/lib/mcp/client-manager";
-import type { McpToolInfo } from "@/types/mcp";
+import type { McpToolInfo, McpToolResult } from "@/types/mcp";
 
 interface ToolMapping {
   serverId: string;
@@ -93,12 +93,15 @@ export async function POST(request: NextRequest) {
           const { toolMap, allTools } = buildToolMap(serverTools);
           const declarations = allTools.map(mcpToolToFunctionDeclaration);
 
+          const toolResultRef: { current: McpToolResult | null } = { current: null };
+
           const onToolCall = async (
             name: string,
             args: Record<string, unknown>,
           ): Promise<Record<string, unknown>> => {
             const mapping = toolMap.get(name);
             if (!mapping) {
+              toolResultRef.current = null;
               return { error: `도구를 찾을 수 없습니다: ${name}` };
             }
 
@@ -107,14 +110,22 @@ export async function POST(request: NextRequest) {
               mapping.originalName,
               args,
             );
+            toolResultRef.current = result;
 
             const textParts = result.content
-              .filter((c) => c.text)
+              .filter((c) => c.type === "text" && c.text)
               .map((c) => c.text)
               .join("\n");
+            const imageCount = result.content.filter(
+              (c) => c.type === "image",
+            ).length;
+            const summary =
+              imageCount > 0
+                ? `${textParts ? textParts + "\n" : ""}[${imageCount}개 이미지 생성됨]`
+                : textParts;
 
             return {
-              result: textParts || JSON.stringify(result.content),
+              result: summary || JSON.stringify(result.content),
               isError: result.isError ?? false,
             };
           };
@@ -146,6 +157,11 @@ export async function POST(request: NextRequest) {
               const mapping = toolMap.get(event.name);
               const resultData = event.result as Record<string, unknown>;
               const isError = resultData.error !== undefined;
+              const capturedContent = toolResultRef.current?.content ?? [
+                { type: "text" as const, text: String(resultData.result ?? "") },
+              ];
+              toolResultRef.current = null;
+
               send({
                 type: "tool_call_result",
                 toolCall: {
@@ -157,12 +173,7 @@ export async function POST(request: NextRequest) {
                   status: isError ? "error" : "success",
                   result: isError
                     ? undefined
-                    : {
-                        content: [
-                          { type: "text", text: String(resultData.result ?? "") },
-                        ],
-                        isError: false,
-                      },
+                    : { content: capturedContent, isError: false },
                   error: isError ? String(resultData.error) : undefined,
                   startedAt: Date.now(),
                   completedAt: Date.now(),
