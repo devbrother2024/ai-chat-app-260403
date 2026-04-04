@@ -102,13 +102,27 @@ function ToolCallBubbleInner({ toolCall }: ToolCallBubbleProps) {
           {toolCall.result && (
             <div>
               <p className="text-foreground/40 mb-1">결과</p>
-              <pre className="rounded bg-foreground/[0.03] p-2 overflow-x-auto text-[11px] leading-relaxed max-h-48">
-                {toolCall.result.content
-                  .map((c) => c.text ?? "")
-                  .filter(Boolean)
-                  .join("\n") ||
-                  JSON.stringify(toolCall.result.content, null, 2)}
-              </pre>
+              {toolCall.result.content
+                .filter((c) => c.type === "image" && c.data)
+                .map((c, i) => (
+                  <img
+                    key={i}
+                    src={`data:${c.mimeType ?? "image/png"};base64,${c.data}`}
+                    alt={`${toolCall.toolName} 결과 이미지`}
+                    className="rounded-md max-w-full max-h-64 my-1"
+                  />
+                ))}
+              {toolCall.result.content.some(
+                (c) => c.type === "text" && c.text,
+              ) && (
+                <pre className="rounded bg-foreground/[0.03] p-2 overflow-x-auto text-[11px] leading-relaxed max-h-48">
+                  {toolCall.result.content
+                    .filter((c) => c.type === "text")
+                    .map((c) => c.text ?? "")
+                    .filter(Boolean)
+                    .join("\n")}
+                </pre>
+              )}
             </div>
           )}
         </div>

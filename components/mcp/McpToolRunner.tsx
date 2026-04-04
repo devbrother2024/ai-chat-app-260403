@@ -174,11 +174,24 @@ export function McpToolRunner({ serverId, tools }: McpToolRunnerProps) {
                     </Badge>
                   )}
                 </div>
-                <pre className="whitespace-pre-wrap font-mono text-xs">
-                  {result.content
-                    .map((c) => c.text ?? JSON.stringify(c))
-                    .join("\n")}
-                </pre>
+                {result.content
+                  .filter((c) => c.type === "image" && c.data)
+                  .map((c, i) => (
+                    <img
+                      key={i}
+                      src={`data:${c.mimeType ?? "image/png"};base64,${c.data}`}
+                      alt="도구 결과 이미지"
+                      className="rounded-md max-w-full max-h-80 my-1.5"
+                    />
+                  ))}
+                {result.content.some((c) => c.type !== "image") && (
+                  <pre className="whitespace-pre-wrap font-mono text-xs">
+                    {result.content
+                      .filter((c) => c.type !== "image")
+                      .map((c) => c.text ?? JSON.stringify(c))
+                      .join("\n")}
+                  </pre>
+                )}
               </div>
             )}
           </>
